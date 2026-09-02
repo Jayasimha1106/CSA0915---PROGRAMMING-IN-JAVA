@@ -1,0 +1,4 @@
+C001|Arun Kumar|124 MG Road, Bangalore|9876543210|arun@example.com
+C002|Priya Sharma|45 Park Street, Kolkata|9876543211|priya@example.com
+C003|Rahul Verma|78 Nehru Nagar, Delhi|9876543212|rahul@example.com
+C004|Sneha Patel|12 SV Road, Mumbai|9876543213|sneha@example.com

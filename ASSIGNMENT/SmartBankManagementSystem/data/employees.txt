@@ -1,0 +1,4 @@
+E101|Vikram Rathore|Management|Branch Manager|85000.00
+E102|Ananya Deshmukh|Operations|Chief Cashier|48000.00
+E103|Karthik Raja|Customer Support|Relationship Officer|42000.00
+E104|Meera Nair|Loans & Credit|Credit Analyst|52000.00

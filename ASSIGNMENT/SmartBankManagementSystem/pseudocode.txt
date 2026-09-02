@@ -1,0 +1,195 @@
+================================================================================
+SMART BANK MANAGEMENT SYSTEM - STRUCTURED ALGORITHMIC PSEUDOCODE
+================================================================================
+
+1. APPLICATION INITIALIZATION & AUTHENTICATION
+--------------------------------------------------------------------------------
+ALGORITHM StartApplication():
+    INITIALIZE bank = new Bank()
+    INITIALIZE fileManager = new FileManager("data")
+    INITIALIZE serializationManager = new SerializationManager()
+    INITIALIZE databaseManager = new DatabaseManager()
+    INITIALIZE transactionManager = new TransactionManager()
+    
+    CALL bank.loadSampleData()
+    DISPLAY LoginFrame()
+
+ALGORITHM AuthenticateUser(username, password):
+    IF username is EMPTY OR password is EMPTY THEN
+        SHOW Dialog("Please enter both username and password")
+        RETURN
+    END IF
+    
+    IF username EQUALS "admin" AND password EQUALS "admin123" THEN
+        CLOSE LoginFrame
+        DISPLAY MainDashboardFrame()
+    ELSE
+        SHOW Dialog("Authentication Failed")
+    END IF
+
+
+2. CUSTOMER & ACCOUNT CREATION (WITH POLYMORPHISM)
+--------------------------------------------------------------------------------
+ALGORITHM CreateCustomer(id, name, address, phone, email):
+    IF id is empty OR name is empty THEN
+        THROW BankException("Customer ID and Name are required")
+    END IF
+    IF customers.containsKey(id) THEN
+        THROW BankException("Customer ID already exists")
+    END IF
+    
+    Customer customer = new Customer(id, name, address, phone, email)
+    customers.put(id, customer)
+    LOG "Customer created successfully"
+
+ALGORITHM CreateAccount(accNum, customerId, type, initialBalance, extra1, extra2):
+    IF NOT customers.containsKey(customerId) THEN
+        THROW BankException("Customer does not exist")
+    END IF
+    IF accounts.containsKey(accNum) THEN
+        THROW InvalidAccountException("Account number already exists")
+    END IF
+    IF initialBalance < 0 THEN
+        THROW InvalidAmountException("Initial balance cannot be negative")
+    END IF
+    
+    Account account = null
+    IF type EQUALS "Savings" THEN
+        interestRate = extra1
+        minBalance = extra2
+        account = new SavingsAccount(accNum, customerId, initialBalance, interestRate, minBalance)
+    ELSE IF type EQUALS "Checking" THEN
+        overdraftLimit = extra1
+        transactionFee = extra2
+        account = new CheckingAccount(accNum, customerId, initialBalance, overdraftLimit, transactionFee)
+    END IF
+    
+    accounts.put(accNum, account)
+    IF initialBalance > 0 THEN
+        RecordTransaction(accNum, "DEPOSIT", initialBalance, "Initial Balance Deposit")
+    END IF
+
+
+3. SYNCHRONIZED BANKING TRANSACTIONS
+--------------------------------------------------------------------------------
+ALGORITHM Deposit(accountNumber, amount, description):
+    Account account = accounts.get(accountNumber)
+    IF account is null THEN
+        THROW InvalidAccountException("Account not found")
+    END IF
+    
+    LOCK account:
+        IF amount <= 0 THEN
+            THROW InvalidAmountException("Amount must be positive")
+        END IF
+        account.balance = account.balance + amount
+    UNLOCK account
+    
+    RecordTransaction(accountNumber, "DEPOSIT", amount, description)
+
+ALGORITHM Withdraw(accountNumber, amount, description):
+    Account account = accounts.get(accountNumber)
+    IF account is null THEN
+        THROW InvalidAccountException("Account not found")
+    END IF
+    
+    LOCK account:
+        IF amount <= 0 THEN
+            THROW InvalidAmountException("Amount must be positive")
+        END IF
+        
+        IF account is SavingsAccount THEN
+            IF (account.balance - amount) < account.minimumBalance THEN
+                THROW InsufficientBalanceException("Minimum balance must be maintained")
+            END IF
+            account.balance = account.balance - amount
+        ELSE IF account is CheckingAccount THEN
+            totalDeduction = amount
+            IF amount > account.balance THEN
+                totalDeduction = totalDeduction + account.transactionFee
+            END IF
+            IF (account.balance - totalDeduction) < -account.overdraftLimit THEN
+                THROW InsufficientBalanceException("Overdraft limit exceeded")
+            END IF
+            account.balance = account.balance - totalDeduction
+        END IF
+    UNLOCK account
+    
+    RecordTransaction(accountNumber, "WITHDRAWAL", amount, description)
+
+
+4. DEADLOCK-FREE TWO-ACCOUNT FUND TRANSFER
+--------------------------------------------------------------------------------
+ALGORITHM TransferFunds(senderAccNum, receiverAccNum, amount, description):
+    IF senderAccNum EQUALS receiverAccNum THEN
+        THROW InvalidTransactionException("Cannot transfer funds to same account")
+    END IF
+    IF amount <= 0 THEN
+        THROW InvalidAmountException("Transfer amount must be positive")
+    END IF
+    
+    Account sender = accounts.get(senderAccNum)
+    Account receiver = accounts.get(receiverAccNum)
+    
+    IF sender is null OR receiver is null THEN
+        THROW InvalidAccountException("One or both accounts do not exist")
+    END IF
+    
+    // Deterministic Lock Ordering to Prevent Deadlock
+    Account firstLock = (senderAccNum < receiverAccNum) ? sender : receiver
+    Account secondLock = (senderAccNum < receiverAccNum) ? receiver : sender
+    
+    LOCK firstLock:
+        LOCK secondLock:
+            CALL Withdraw(sender.accountNumber, amount, "Transfer to " + receiver.accountNumber)
+            CALL Deposit(receiver.accountNumber, amount, "Transfer from " + sender.accountNumber)
+        UNLOCK secondLock
+    UNLOCK firstLock
+
+
+5. JDBC TRANSACTIONAL TRANSFER (ACID)
+--------------------------------------------------------------------------------
+ALGORITHM JdbcTransfer(senderAcc, receiverAcc, amount, description):
+    Connection conn = DriverManager.getConnection(url, user, pass)
+    TRY:
+        conn.setAutoCommit(false) // Begin Transaction
+        
+        // 1. Verify and lock sender balance
+        ResultSet rs = ExecuteQuery("SELECT balance FROM accounts WHERE account_number = ? FOR UPDATE", senderAcc)
+        IF NOT rs.next() OR rs.balance < amount THEN
+            THROW InsufficientBalanceException("Insufficient sender funds")
+        END IF
+        
+        // 2. Debit Sender
+        ExecuteUpdate("UPDATE accounts SET balance = balance - ? WHERE account_number = ?", amount, senderAcc)
+        
+        // 3. Credit Receiver
+        ExecuteUpdate("UPDATE accounts SET balance = balance + ? WHERE account_number = ?", amount, receiverAcc)
+        
+        // 4. Insert Audit Records
+        ExecuteUpdate("INSERT INTO transactions VALUES (?, ?, 'TRANSFER_OUT', ?, NOW(), ?)", txId1, senderAcc, amount, description)
+        ExecuteUpdate("INSERT INTO transactions VALUES (?, ?, 'TRANSFER_IN', ?, NOW(), ?)", txId2, receiverAcc, amount, description)
+        
+        conn.commit() // Commit Transaction
+        RETURN SUCCESS
+    CATCH Exception:
+        conn.rollback() // Rollback on error
+        THROW Exception
+    FINALLY:
+        conn.setAutoCommit(true)
+        conn.close()
+
+
+6. OBJECT SERIALIZATION & DESERIALIZATION
+--------------------------------------------------------------------------------
+ALGORITHM SerializeBank(bank, filepath):
+    TRY (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(filepath))):
+        oos.writeObject(bank)
+        oos.flush()
+        LOG "Bank state saved successfully"
+
+ALGORITHM DeserializeBank(filepath):
+    TRY (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(filepath))):
+        Bank restoredBank = (Bank) ois.readObject()
+        RETURN restoredBank
+================================================================================

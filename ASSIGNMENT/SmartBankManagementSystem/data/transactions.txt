@@ -1,0 +1,5 @@
+TXN-SEED01|A1001|DEPOSIT|10000.00|2026-09-01 10:00:00|Initial opening balance deposit
+TXN-SEED02|A1002|DEPOSIT|5000.00|2026-09-01 10:30:00|Initial opening balance deposit
+TXN-SEED03|A1003|DEPOSIT|25000.00|2026-09-01 11:00:00|Initial opening balance deposit
+TXN-SEED04|A1004|DEPOSIT|15000.00|2026-09-01 11:15:00|Initial opening balance deposit
+TXN-SEED05|A1005|DEPOSIT|8000.00|2026-09-01 11:45:00|Initial opening balance deposit
